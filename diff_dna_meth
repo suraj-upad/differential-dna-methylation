@@ -1,0 +1,231 @@
+library(tidyverse)
+library(lmtest)
+
+counts <- read.csv('dep_counts.csv',check.names=FALSE)
+head(counts)
+ids <- counts$specimenID
+row.names(counts) <- counts$specimenID
+counts$specimenID <- NULL
+
+
+
+#countsall 
+counts_all <- read.csv('counts_all.csv',check.names=FALSE)
+head(counts_all)
+idsa <- counts_all$specimenID
+row.names(counts_all) <- counts_all$specimenID
+counts_all$specimenID <- NULL
+
+
+colData <- read.csv('only_dep_pcs.csv')
+colData_all <- read.csv('ids_all_603_v2.csv')
+
+
+#make male female
+table(colData$msex == '1')
+male_counts <- counts[, colData$msex == '1']
+female_counts <- counts[, colData$msex == '0']
+male_counts <- counts_all[, colData_all$msex == '1']
+female_counts <- counts_all[, colData_all$msex == '0']
+
+
+male_data <- colData[colData$msex == '1' , ]
+female_data <- colData[colData$msex == '0' , ]
+male_data <- colData_all[colData_all$msex == '1' , ]
+female_data <- colData_all[colData_all$msex == '0' , ]
+
+
+# null model LOAD only####3
+dgx <- colData[,'DIAG']
+
+# confounding variables
+
+age <- colData[,'age_death']
+sex <- colData[,'msex']
+braak <- colData[,'braaksc']
+pmi <- colData[,'pmi']
+apoe <- colData[,'APOE4']
+
+fmla2 <- dgx ~ braak + pmi + age
+model2 <- glm(formula = fmla2, family = "binomial")
+#######
+
+#full sample ###
+dgx_all <- colData_all[,'DIAG']
+
+# confounding variables
+braak_all <- colData_all[,'braaksc']
+age_all <- colData_all[,'age_death']
+sex_all <- colData_all[,'msex']
+pmi_all <- colData_all[,'pmi']
+apoe_all <- colData_all[,'APOE4']
+
+# null model all
+fmla2_all <- dgx_all ~ braak_all  + pmi_all + apoe_all + age_all + sex_all
+model2_all <- glm(formula = fmla2_all, family = "binomial")
+
+#####
+
+#male and female
+# null model LOAD only####
+dgx <- male_data[,'DIAG']
+
+# confounding variables
+
+age <- male_data[,'age_death']
+sex <- male_data[,'msex']
+braak <- male_data[,'braaksc']
+pmi <- male_data[,'pmi']
+apoe <- male_data[,'APOE4']
+
+
+dgx <- female_data[,'DIAG']
+age <- female_data[,'age_death']
+sex <- female_data[,'msex']
+braak <- female_data[,'braaksc']
+pmi <- female_data[,'pmi']
+apoe <- female_data[,'APOE4']
+
+fmla2 <- dgx ~ braak + pmi + age
+model2 <- glm(formula = fmla2, family = "binomial")
+#######
+
+n <- 420132
+
+#create output table
+out <- data.frame(matrix(0, ncol = 6, nrow = n))
+colnames(out)<- c('probe','Estimate','p.val','P.adj', 'logFC','logfc2')
+
+cases <- colData[colData$DIAG == 1, ]
+controls <- colData[colData$DIAG == 0, ]
+
+cases_all <- colData_all[colData_all$DIAG == 1, ]
+controls_all <- colData_all[colData_all$DIAG == 0, ]
+
+
+
+### load, male, female
+for(i in 1:n){
+  #get probe
+  probe <- unlist(female_counts[i,], use.names = FALSE)
+  
+  # test model
+  fmla1 <- dgx ~ braak + pmi + age + probe
+  model1 <- glm(formula = fmla1, family = "binomial")
+  
+  # lr test
+  lrtest <- lrtest(model1, model2)
+  p.val <- lrtest$Pr[2]
+  
+  #logFC Calc
+  case_fc <- as.numeric(counts[ i , cases$specimenID])
+  mean_case_fc <- mean(case_fc)
+  
+  control_fc <- as.numeric(counts[ i , controls$specimenID])
+  mean_control_fc <- mean(control_fc)
+  
+  logfc <- mean(log2(case_fc)) - mean(log2(control_fc))
+  logfc2 <- log2(mean(case_fc)-mean(control_fc))
+  
+  out[i,] <- c(row.names(female_counts)[i], unlist(model1$coefficients['probe'], use.names = FALSE), p.val, 0, 1, 1)
+  
+}
+
+out$P.adj = p.adjust(out$p.val,"BH")
+
+write.csv(out,"~/Literature/epigentics/out_data_be_all-female.csv")
+###
+
+#### full smaple
+
+for(i in 1:n){
+  #get probe
+  probe_all <- unlist(counts_all[i,], use.names = FALSE)
+  
+  # test model
+  fmla1_all <- dgx_all ~ braak_all + pmi_all + apoe_all+ +age_all + sex_all + probe_all 
+  model1_all <- glm(formula = fmla1_all, family = "binomial")
+  
+  # lr test
+  lrtest <- lrtest(model1_all, model2_all)
+  p.val <- lrtest$Pr[2]
+  
+  #logFC Calc
+  case_fc <- as.numeric(counts_all[ i , cases_all$specimenID])
+  mean_case_fc <- mean(case_fc)
+  
+  control_fc <- as.numeric(counts_all[ i , controls_all$specimenID])
+  mean_control_fc <- mean(control_fc)
+  
+  logfc <- mean(log2(case_fc)) - mean(log2(control_fc))
+  logfc2 <- log2(mean_case_fc)-log2(mean_control_fc)
+  #
+  out[i,] <- c(row.names(counts_all)[i], unlist(model1_all$coefficients['probe_all'], use.names = FALSE), p.val, 0, 1, 2)
+  
+}
+
+out$P.adj = p.adjust(out$p.val,"BH")
+
+write.csv(out,"~/Literature/epigentics/out_data_be_all-APOE-_10232022.csv")
+
+
+####
+
+out <- read.csv('out_data_7192022.csv')
+
+
+
+
+#violin plots
+love <-unlist(counts["cg20442550",] , use.names=FALSE )
+colData$cg20442550 <- love
+
+love2 <-unlist(mval["cg20442550",] , use.names=FALSE )
+colData$cg20442550_m <- love2
+
+install.packages("ggplot2")
+library(ggplot2)
+
+
+ds <-unlist(counts_all["cg20442550",], use.names=FALSE)
+colData_all$cg20442550 <- ds
+
+colData[colData == "case_d"] <- "Depression Case"
+colData[colData == "control_d"] <- "Depression Control"
+
+colData_all[colData_all == "case_d"] <- "Depression Case"
+colData_all[colData_all == "control_d"] <- "Depression Control"
+
+#make AD only beta value violin plot
+dp <- ggplot(colData, aes(x=depression.Case.Control, y=cg20442550, fill=depression.Case.Control)) + 
+  geom_violin(trim=FALSE)+
+  geom_boxplot(width=0.1, fill="white")+
+  labs(y="Beta Value", x="", title="LOAD only Sample")
+dp + theme_classic()
+dp + theme(legend.position = "none", plot.title = element_text(hjust = 0.5))
+
+#make AD only m value violin plot
+dp <- ggplot(colData_all, aes(x=depression.Case.Control, y=cg20442550_m, fill=depression.Case.Control)) + 
+  geom_violin(trim=FALSE)+
+  geom_boxplot(width=0.1, fill="white")+
+  labs(y="M Value", x="Case-Control")
+dp + theme_classic()
+dp + theme(legend.position = "none")
+
+#make all beta value violin plot
+dp <- ggplot(colData_all, aes(x=depression.Case.Control.of.ROSMAPALLPEOPLE, y=cg20442550, fill=depression.Case.Control.of.ROSMAPALLPEOPLE)) + 
+  geom_violin(trim=FALSE)+
+  geom_boxplot(width=0.1, fill="white")+
+  labs(y="Beta Value", x="", title ="Full Sample")
+dp + theme_classic()
+dp + theme(legend.position = "none", plot.title = element_text(hjust = 0.5))
+
+#make all m value violin plot
+dp <- ggplot(colData, aes(x=depression.Case.Control.of.ROSMAPALLPEOPLE, y=cg20442550_m, fill=depression.Case.Control.of.ROSMAPALLPEOPLE)) + 
+  geom_violin(trim=FALSE)+
+  geom_boxplot(width=0.1, fill="white")+
+  labs(y="M Value", x="Case-Control")
+dp + theme_classic()
+dp + theme(legend.position = "none")
+
+
