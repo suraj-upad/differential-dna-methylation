@@ -1,0 +1,6 @@
+This is the script used in the paper titled "Differential Gene Expression and DNA Methylation in the Risk of Depression in LOAD  Patients"
+
+
+It requires counts data in the from of beta values and the metadata for each sample. 
+
+It creates a general linear model, one with the CpG probe and one with just the covariates. The script makes the comparison between these GLMs for each probe. 
